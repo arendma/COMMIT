@@ -37,7 +37,7 @@ The configuration script will also add all COMMIT functions to the Matlab search
 run('[path_to_commit]/code/matlab/options.m')
 ```
 
-Finally, add bash scripts at `code/bash/` to your PATH variable.
+Finally, make  bash scripts at `code/bash/` executable using `chmod u+x code/bash/*` and at the folder to your PATH variable.
 
 ## (optional) update reaction database
 The reaction database for gap-filling and the tables used for reaction and metabolite ID translation depend on the [MetaNetX database](https://www.metanetx.org/mnxdoc/mnxref.html).
