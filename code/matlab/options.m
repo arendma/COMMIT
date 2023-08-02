@@ -15,7 +15,7 @@ habitat = 'Soil';
 experiments = {'Schlaeppi','Bulgarelli'};
 
 % path to COMMIT top directory
-topDir = 'C:\Users\wende\MobaXterm\home\COMMIT';
+topDir = '/home/mpimp-golm.mpg.de/arend1356/COMMIT';
 
 % medium file
 mediumFile = 'data/media/minimal-medium.mat';
