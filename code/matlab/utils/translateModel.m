@@ -1,4 +1,4 @@
-function translatedModel = translateModel(model, source, target, translationDB, complete, verbose)
+function [translatedModel, unmappedRxns, unmappedMets] = translateModel(model, source, target, translationDB, complete, verbose, fztranslate)
 %% translatedModel = translateModel(model, source, target, translationDB, complete, verbose)
 % Translates a model into a different name space. The underlying table for
 % translation is either found in the working directory or in a directory on
@@ -14,11 +14,17 @@ function translatedModel = translateModel(model, source, target, translationDB, 
 %                                       the model if 1, default: 0
 %           logical verbose (optional): if true, print warnings and
 %                                       progress statements (default: true)
+%       logical fztranslate(optional):  if true, unmappedRxns and
+%                                       unmappedMets contain a second
+%                                       column, giving the source databes
+%                                       entries with shortest levenshteyn
+%                                       distance
 % Output:   struct translatedModel:     model with translated field and
 %                                       additional fields if complete==1
 %           cellstr unmappedRxns:       array that contains the ids of
 %                                       reactions of the source namespace 
-%                                       that could not be mapped
+%                                       that could not be mapped see also
+%                                       fztranslate in Input.
 %           cellstr unmappedMets:       unmapped metabolite source ids
 
 translatedModel = model;
@@ -70,7 +76,7 @@ else
     end
     
     % translate the reaction iss to the target namespace
-    new_rxns = translateIDs(rxns, 'rxn', translationDB.rxnTab, source, target, verbose);
+    [new_rxns, fz_rxns] = translateIDs(rxns, 'rxn', translationDB.rxnTab, source, target, verbose, fztranslate);
         
     % add prefixes compartment identifiers to the reaction ids (except for the
     % biomass reaction and boundary reactions)
@@ -78,8 +84,12 @@ else
     new_rxns = strcat(new_rxns, rxn_comps);
     
     % replace the non-translated ids with the original ids
-    
+    unmappedRxns=model.rxns(idx_nm);
+    if fztranslate
+        unmappedRxns=[unmappedRxns, fz_rxns(idx_nm)];
+    end
     idx_nm = logical(ex_rxns + biomass + idx_nm);
+    %Return untranslated reactions
     new_rxns(idx_nm) = model.rxns(idx_nm);
     
     if verbose
@@ -87,9 +97,14 @@ else
     end
     
     % translate the metabolite ids to the target namespace
-    new_mets = translateIDs(mets, 'met', translationDB.metTab,  source, target, verbose);
+    [new_mets, fz_mets] = translateIDs(mets, 'met', translationDB.metTab,  source, target, verbose, fztranslate);
     % replace the non-translated ids with the original ids
     idx_nm = cellfun('isempty', new_mets);
+    %Return untranslated identifiers
+    unmappedMets=mets(idx_nm);
+    if fztranslate
+        unmappedMets=[unmappedMets, fz_mets(idx_nm)];
+    end
     new_mets(idx_nm) = mets(idx_nm);
     % add compartment idetifiers to the metabolite ids
     new_mets = strcat(new_mets, met_comps);

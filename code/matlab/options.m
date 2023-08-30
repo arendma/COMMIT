@@ -15,7 +15,7 @@ habitat = 'Soil';
 experiments = {'Schlaeppi','Bulgarelli'};
 
 % path to COMMIT top directory
-topDir = '/home/mpimp-golm.mpg.de/arend1356/COMMIT';
+topDir = 'C:/Users/Suiram/Nextcloud/PhD/Project PANgreen/COMMIT/';
 
 % medium file
 mediumFile = 'data/media/minimal-medium.mat';
