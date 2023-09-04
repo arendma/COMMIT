@@ -84,6 +84,8 @@ trList = repmat({''}, numel(idList), 1);
 % initialize fuzy translation IDs list
 if fztranslate 
     fzList = repmat({''}, numel(idList), 1);
+elseif nargout>1
+    fzList=[];
 end
 
 % Filter source  and target IDs by empty keys and keys that are definitely not

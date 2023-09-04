@@ -1,5 +1,5 @@
 function [translatedModel, unmappedRxns, unmappedMets] = translateModel(model, source, target, translationDB, complete, verbose, fztranslate)
-%% translatedModel = translateModel(model, source, target, translationDB, complete, verbose)
+%% translatedModel = translateModel(model, source, target, translationDB, complete, verbose, fztranslate)
 % Translates a model into a different name space. The underlying table for
 % translation is either found in the working directory or in a directory on
 % the MATLAB path.
@@ -101,14 +101,14 @@ else
     % replace the non-translated ids with the original ids
     idx_nm = cellfun('isempty', new_mets);
     %Return untranslated identifiers
-    unmappedMets=mets(idx_nm);
-    if fztranslate
-        unmappedMets=[unmappedMets, fz_mets(idx_nm)];
-    end
+
     new_mets(idx_nm) = mets(idx_nm);
     % add compartment idetifiers to the metabolite ids
     new_mets = strcat(new_mets, met_comps);
-    
+    if fztranslate
+        unmappedMets=model.mets(idx_nm);
+        unmappedMets=[unmappedMets, fz_mets(idx_nm)];
+    end
     translatedModel.rxns = new_rxns;
     translatedModel.mets = new_mets;
     
