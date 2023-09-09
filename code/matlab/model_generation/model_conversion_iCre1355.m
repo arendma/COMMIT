@@ -1,5 +1,6 @@
 function model_conversion_iCre1355
 %Script to convert the iCre1355 model MetaCyc format
+verbose=true;
 translationDB=loadTranslationDB;
 mod=readCbModel('data/models/iCre1355/iCre1355_mixo_upd.xml');
 %import KEGG ids 
@@ -66,7 +67,7 @@ writetable(conv_mets_out, 'data/models/iCre1355/iCre1355_mixo_met_conv.xlsx')
 
 %match reactions using model borgifier
 %Generate a MetaCyc supermodel using RAVEN functions
-McycMod=getModelFromMetaCyc([],false,false,false);
+McycMod=getModelFromMetaCyc([],true, true, true);
 %removing reactions without non-zero entries in stochiometric matrix
 %since calculation of network features fails otherwise
 McycMod=removeRxns(McycMod, McycMod.rxns(sum(abs(McycMod.S),1)==0));
@@ -89,17 +90,76 @@ Tmod=buildTmodel(McycMod);
 borg_rxnList=ones(length(borg_mod.rxns),1)*-1;
 
 for i=1:length(borg_rxnList)
-    get entry in conv_table
-    borg_mod.rxns(i) 
-    if ~isempty(conv_rxn_out.COMMITtr_rxnID(i))
-        crxn=conv_rxn_out.COMMITtr_rxnID(i);
-        find(strcmpi(strsplit(crxn, '|')Tmod.Models.MetaCyc.rxns)
+    %get entry in conv_table
+    conv_idx=strcmpi(borg_mod.rxns{i}, conv_rxn_out.Orig_rxnID); 
+        if sum(conv_idx)~=1 %check if borg cmodel ids is mappable to original model
+            if sum(conv_idx)==0 && verbose
+                warning([borg_mod.rxns{i} ' is not mappable back to original iCre1355 model. Skipping...'])
+            elseif sum(conv_idx)>1 && verbose
+                warning([borg_mod.rxns{i} ' maps to more than one ID in the original iCre1355 model. Skipping...'])
+            end
+        else
+            %check if there is a commit tranlated ID available
+            if ~isempty(conv_rxn_out.COMMITtr_rxnID{conv_idx}) %if ID from BIGG is available take this one
+                query=conv_rxn_out.COMMITtr_rxnID(conv_idx);
+            elseif ~isempty(conv_rxn_out.COMMITtr_rxnID_fromKEGG{conv_idx})
+                query=conv_rxn_out.COMMITtr_rxnID_fromKEGG(conv_idx);
+            end
+            if ~isempty(query)
+                %find commit translated metacyc id in metacyc model
+                query=strsplit(query{1}, '|');
+                query=strrep(query,'-', '_');
+                crxn_idx=[];
+                j=1;
+                while isempty(crxn_idx) && j<=length(query)
+                    crxn_idx=find(strcmpi(query{j}, Tmod.rxns));
+                    j=j+1;
+                end
+                if length(crxn_idx)==1
+                    borg_rxnList(i)=crxn_idx;
+                elseif verbose
+                    if isempty(crxn_idx)
+                        warning([strjoin(query, '|'), ' (', num2str(i), ') not mappable to metacyc template model.Skipping...'])
+                        
+                    elseif length(crxn_idx)>1
+                        warning([strjoin(query, '|') ' maps to more than one reaction in  metacyc template model.Skipping...'])
+                    end
+                end
+                query='';
+            end
+        end
+end
 
-[]
+%train classifier
+global SCORE TMODEL CMODEL
+SCORE=score;
+TMODEL=Tmod;
+CMODEL=borg_mod;
+
+%Create a training rxnList with only 80% of the assignments
+test_set=randsample(find(borg_rxnList~=-1), ceil(sum(borg_rxnList~=-1)*0.2));
+train_rxnList=borg_rxnList;
+train_rxnList(test_set)=-1;
+
+train_RFStat=optimalScores(train_rxnList, 'RF');
+train_linStats=optimalScores(train_rxnList, 'linear');
+
+RFacc=sum(train_RFStat.bestMatchIndex(test_set)==borg_rxnList(test_set))/length(test_set);
+linacc=sum(train_linStats.bestMatchIndex(test_set)==borg_rxnList(test_set))/length(test_set);
+avgacc=sum(Stats.bestMatchIndex(test_set)==borg_rxnList(test_set))/length(test_set);
+disp(['The accuracy of machine learning in the test set', num2str(length(test_set)), ' (20%) is ', num2str(linacc), ' (linear reg) ', ...
+    num2str(RFacc), '(RandomForest) vs ', num2str(avgacc), 'for the average score without training'])
+        
+%choose the better performing model and train on all data
+[~, mod_choice]=max([linacc, RFacc]);
+learn_mod={'linear', 'RF'};
+OptStats=optimalScores(borg_rxnList, learn_mod{mod_choice});
+
+
 metScores=compareAllMets(borg_mod, Tmod);
 [metBestMatch, metBestMatchIdx] = max(metScores, [], 2);
 %save results
-save('borgout.mat', 'borg_mod', 'Tmod', 'score', 'Stats', 'metBestMatch', 'metBestMatchIdx')
+save('borgout.mat', 'borg_mod', 'Tmod', 'score', 'Stats','OptStats', 'train_rxnList', 'metBestMatch', 'metBestMatchIdx')
 
 borg_bm_rxn=repmat({''}, length(mod.rxns),1); %best match rxn ID
 borg_bm_rxn_score=nan(length(mod.rxns),1); %best match score
@@ -108,8 +168,8 @@ borg_bm_rxn_score=nan(length(mod.rxns),1); %best match score
 for i=1:size(conv_rxn_out,1)
     if any(strcmpi(strrep(conv_mod.rxns{i}, '-', '_'), borg_mod.rxns), 'all') %minus are replaced by underscores in borg models and all caps
         tmpidx=strcmpi(strrep(conv_mod.rxns{i}, '-', '_'), borg_mod.rxns);
-        borg_bm_rxn(i)=Tmod.rxns(Stats.bestMatchIndex(tmpidx)); 
-        borg_bm_rxn_score(i)=Stats.bestMatch(tmpidx);
+        borg_bm_rxn(i)=Tmod.rxns(OptStats.bestMatchIndex(tmpidx)); 
+        borg_bm_rxn_score(i)=OptStats.bestMatch(tmpidx);
     end
 end
 
